@@ -3,6 +3,7 @@ from openpilot.selfdrive.car.honda.values import CAR as HONDA
 from openpilot.selfdrive.car.hyundai.values import CAR as HYUNDAI
 from openpilot.selfdrive.car.toyota.values import CAR as TOYOTA
 from openpilot.selfdrive.car.volkswagen.values import CAR as VW
+from openpilot.selfdrive.car.tesla.values import CAR as TESLA
 
 FW_VERSIONS = get_interface_attr('FW_VERSIONS', combine_brands=True, ignore_none=True)
 _FINGERPRINTS = get_interface_attr('FINGERPRINTS', combine_brands=True, ignore_none=True)
@@ -117,4 +118,8 @@ MIGRATION = {
   "HYUNDAI TUCSON HYBRID 4TH GEN": HYUNDAI.TUCSON_4TH_GEN,
   "KIA SPORTAGE HYBRID 5TH GEN": HYUNDAI.KIA_SPORTAGE_5TH_GEN,
   "KIA SORENTO PLUG-IN HYBRID 4TH GEN": HYUNDAI.KIA_SORENTO_HEV_4TH_GEN,
+
+  # Removal of platform_str, see https://github.com/commaai/openpilot/pull/31868/
+  'TESLA AP3 MODEL 3': TESLA.TESLA_AP3_MODEL3,
+  'TESLA AP3 MODEL Y': TESLA.TESLA_AP3_MODELY,
 }

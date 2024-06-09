@@ -214,9 +214,8 @@ class Panda:
   FLAG_HYUNDAI_CANFD_HDA2_ALT_STEERING = 128
   FLAG_HYUNDAI_LFA_BTN = 256
 
-  FLAG_TESLA_POWERTRAIN = 1
+  FLAG_TESLA_MODEL3_Y = 1
   FLAG_TESLA_LONG_CONTROL = 2
-  FLAG_TESLA_RAVEN = 4
 
   FLAG_VOLKSWAGEN_LONG_CONTROL = 1
 
@@ -318,6 +317,10 @@ class Panda:
     # set CAN speed
     for bus in range(PANDA_BUS_CNT):
       self.set_can_speed_kbps(bus, self._can_speed_kbps)
+
+  @property
+  def spi(self) -> bool:
+    return isinstance(self._handle, PandaSpiHandle)
 
   @classmethod
   def spi_connect(cls, serial, ignore_version=False):

@@ -214,10 +214,13 @@ void ignition_can_hook(CANPacket_t *to_push) {
       ignition_can_cnt = 0U;
     }
 
-    // Tesla exception
-    if ((addr == 0x348) && (len == 8)) {
-      // GTW_status
-      ignition_can = (GET_BYTE(to_push, 0) & 0x1U) != 0U;
+    // Tesla Model 3 exception
+    if ((addr == 0x118) && (len == 8)) {
+      // DI_state
+      int gear = GET_BYTE(to_push, 2) >> 5;
+      ignition_can = (gear == 2) ||  // DI_GEAR_R
+                     (gear == 3) ||  // DI_GEAR_N
+                     (gear == 4);    // DI_GEAR_D
       ignition_can_cnt = 0U;
     }
 
@@ -269,8 +272,8 @@ void can_send(CANPacket_t *to_push, uint8_t bus_number, bool skip_tx_hook) {
       if ((bus_number == 3U) && (bus_config[3].can_num_lookup == 0xFFU)) {
         gmlan_send_errs += bitbang_gmlan(to_push) ? 0U : 1U;
       } else {
-        tx_buffer_overflow += can_push(can_queues[bus_number], to_push) ? 0U : 1U;
-        process_can(CAN_NUM_FROM_BUS_NUM(bus_number));
+      tx_buffer_overflow += can_push(can_queues[bus_number], to_push) ? 0U : 1U;
+      process_can(CAN_NUM_FROM_BUS_NUM(bus_number));
       }
     }
   } else {
