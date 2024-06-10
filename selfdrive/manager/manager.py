@@ -127,7 +127,7 @@ def manager_init(frogpilot_functions) -> None:
     ("CESpeed", "0"),
     ("CESpeedLead", "15"),
     ("CEStopLights", "1"),
-    ("CEStopLightsLead", "0"),
+    ("CEStopLightsLead", "1"),
     ("ClusterOffset", "1.015"),
     ("Compass", "0"),
     ("ConditionalExperimental", "1"),
