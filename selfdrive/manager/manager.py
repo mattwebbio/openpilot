@@ -124,7 +124,7 @@ def manager_init(frogpilot_functions) -> None:
     ("CENavigationTurns", "1"),
     ("CESignal", "1"),
     ("CESlowerLead", "1"),
-    ("CESpeed", "0"),
+    ("CESpeed", "15"),
     ("CESpeedLead", "15"),
     ("CEStopLights", "1"),
     ("CEStopLightsLead", "1"),
