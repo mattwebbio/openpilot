@@ -47,7 +47,6 @@ FrogPilotControlsPanel::FrogPilotControlsPanel(SettingsWindow *parent) : FrogPil
   isRelease = branch == "FrogPilot";
 
   const std::vector<std::tuple<QString, QString, QString, QString>> controlToggles {
-    {"AlwaysOnLateral", tr("Always on Lateral"), tr("Maintain openpilot lateral control when the brake or gas pedals are used.\n\nDeactivation occurs only through the 'Cruise Control' button."), "../frogpilot/assets/toggle_icons/icon_always_on_lateral.png"},
     {"AlwaysOnLateralMain", tr("Enable On Cruise Main"), tr("Enable 'Always On Lateral' by clicking your 'Cruise Control' button without requring openpilot to be enabled first."), ""},
     {"PauseAOLOnBrake", tr("Pause On Brake Below"), tr("Pause 'Always On Lateral' when the brake pedal is being pressed below the set speed."), ""},
     {"HideAOLStatusBar", tr("Hide the Status Bar"), tr("Don't use the status bar for 'Always On Lateral'."), ""},
@@ -165,16 +164,7 @@ FrogPilotControlsPanel::FrogPilotControlsPanel(SettingsWindow *parent) : FrogPil
   for (const auto &[param, title, desc, icon] : controlToggles) {
     AbstractControl *toggle;
 
-    if (param == "AlwaysOnLateral") {
-      FrogPilotParamManageControl *aolToggle = new FrogPilotParamManageControl(param, title, desc, icon, this);
-      QObject::connect(aolToggle, &FrogPilotParamManageControl::manageButtonClicked, this, [this]() {
-        openParentToggle();
-        for (auto &[key, toggle] : toggles) {
-          toggle->setVisible(aolKeys.find(key.c_str()) != aolKeys.end());
-        }
-      });
-      toggle = aolToggle;
-    } else if (param == "PauseAOLOnBrake") {
+    if (param == "PauseAOLOnBrake") {
       toggle = new FrogPilotParamValueControl(param, title, desc, icon, 0, 99, std::map<int, QString>(), this, false, tr(" mph"));
 
     } else if (param == "ConditionalExperimental") {
@@ -882,7 +872,7 @@ FrogPilotControlsPanel::FrogPilotControlsPanel(SettingsWindow *parent) : FrogPil
     }
   });
 
-  std::set<QString> rebootKeys = {"AlwaysOnLateral", "NNFF", "NNFFLite"};
+  std::set<QString> rebootKeys = {"NNFF", "NNFFLite"};
   for (const QString &key : rebootKeys) {
     QObject::connect(static_cast<ToggleControl*>(toggles[key.toStdString().c_str()]), &ToggleControl::toggleFlipped, [this]() {
       if (started) {
