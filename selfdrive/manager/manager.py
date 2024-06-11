@@ -316,6 +316,7 @@ def manager_init(frogpilot_functions) -> None:
 
     # Tesla specific parameters
     ("StockTaccEnabledToggle", "0"),
+    ("VirtualTorqueBlending", "0"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))
