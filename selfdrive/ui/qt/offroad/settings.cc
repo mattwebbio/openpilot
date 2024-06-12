@@ -62,6 +62,12 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/offroad/icon_speed_limit.png",
     },
     {
+      "VirtualTorqueBlending",
+      tr("Virtual Torque Blending"),
+      tr("Allow for nudging the steering while openpilot is engaged."),
+      "../assets/offroad/icon_openpilot.png",
+    },
+    {
       "DisengageOnAccelerator",
       tr("Disengage on Accelerator Pedal"),
       tr("When enabled, pressing the accelerator pedal will disengage openpilot."),
