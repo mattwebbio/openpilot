@@ -1,21 +1,45 @@
 import os
 import time
-import base64
 import json
-import anthropic
+import subprocess
+import tempfile
 from cereal.messaging import SubMaster, PubMaster
 from msgq.visionipc import VisionIpcClient, VisionStreamType
 from cereal import log
 
 
+def call_claude_cli(prompt, image_paths):
+  """Call Claude via CLI subprocess with images"""
+  try:
+    # Build the claude command with images
+    cmd = ["/data/npm-global/bin/claude"]
+
+    # Add images to the command
+    for img_path in image_paths:
+      cmd.extend(["-i", img_path])
+
+    # Set up environment with API key
+    env = os.environ.copy()
+    env["CLAUDE_CODE_OAUTH_TOKEN"] = "PLACEHOLDER"
+
+    # Run the command with the prompt piped to stdin
+    result = subprocess.run(
+      cmd,
+      input=prompt.encode('utf-8'),
+      capture_output=True,
+      timeout=30,
+      env=env
+    )
+
+    if result.returncode != 0:
+      raise RuntimeError(f"Claude CLI failed: {result.stderr.decode('utf-8')}")
+
+    return result.stdout.decode('utf-8').strip()
+  except Exception as e:
+    raise RuntimeError(f"Failed to call Claude CLI: {str(e)}")
+
+
 def main():
-  # Initialize Claude API client
-  api_key = os.getenv("ANTHROPIC_API_KEY")
-  if not api_key:
-    raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-
-  client = anthropic.Anthropic(api_key=api_key)
-
   # Initialize camera clients
   vipc_main = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_ROAD, conflate=True)
   vipc_extra = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_WIDE_ROAD, conflate=True)
@@ -59,13 +83,23 @@ def main():
 
       print(f"\n[Frame {frame_count}] Speed: {current_speed:.1f} m/s, Cruise: {cruise_speed:.1f} m/s")
 
-      # Convert buffers to base64 for API
-      main_image_b64 = base64.standard_b64encode(buf_main.data).decode("utf-8")
-      extra_image_b64 = base64.standard_b64encode(buf_extra.data).decode("utf-8")
+      # Create temporary files for the images
+      with tempfile.TemporaryDirectory() as tmpdir:
+        main_img_path = os.path.join(tmpdir, "main_camera.raw")
+        extra_img_path = os.path.join(tmpdir, "wide_camera.raw")
 
-      # Create prompt with vehicle telemetry
-      prompt = f"""I am driving at {current_speed:.1f} m/s with cruise control set to {cruise_speed:.1f} m/s.
+        # Write image data to temporary files
+        with open(main_img_path, 'wb') as f:
+          f.write(buf_main.data)
+        with open(extra_img_path, 'wb') as f:
+          f.write(buf_extra.data)
+
+        # Create prompt with vehicle telemetry
+        prompt = f"""I am driving at {current_speed:.1f} m/s with cruise control set to {cruise_speed:.1f} m/s.
 Based on the road conditions and traffic in these images, should I do a lane change?
+
+Main camera view is in the first image.
+Wide camera view is in the second image.
 
 Respond with ONLY a JSON object (no markdown, no extra text) with this exact format:
 {{
@@ -75,45 +109,8 @@ Respond with ONLY a JSON object (no markdown, no extra text) with this exact for
   "reason": "brief explanation"
 }}"""
 
-      # Send to Claude API with both images
-      message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=256,
-        messages=[
-          {
-            "role": "user",
-            "content": [
-              {
-                "type": "text",
-                "text": prompt,
-              },
-              {
-                "type": "image",
-                "source": {
-                  "type": "base64",
-                  "media_type": "image/raw",
-                  "data": main_image_b64,
-                },
-              },
-              {
-                "type": "text",
-                "text": "Wide camera view:",
-              },
-              {
-                "type": "image",
-                "source": {
-                  "type": "base64",
-                  "media_type": "image/raw",
-                  "data": extra_image_b64,
-                },
-              },
-            ],
-          }
-        ],
-      )
-
-      # Parse Claude's response as JSON
-      response_text = message.content[0].text.strip()
+        # Call Claude via CLI with both images
+        response_text = call_claude_cli(prompt, [main_img_path, extra_img_path])
 
       # Remove markdown code blocks if present
       if response_text.startswith("```"):
@@ -146,8 +143,9 @@ Respond with ONLY a JSON object (no markdown, no extra text) with this exact for
       print(f"JSON Parse Error: {e}")
       if response_text:
         print(f"Response was: {response_text}")
-    except anthropic.APIError as e:
-      print(f"API Error: {e}")
+    except RuntimeError as e:
+      print(f"Claude CLI Error: {e}")
+      time.sleep(1)
     except Exception as e:
       print(f"Error: {e}")
       time.sleep(1)
