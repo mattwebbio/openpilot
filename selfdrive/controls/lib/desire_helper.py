@@ -1,8 +1,11 @@
+import time
 from cereal import log, custom
 from openpilot.common.constants import CV
 from openpilot.common.realtime import DT_MDL
 from openpilot.sunnypilot.selfdrive.controls.lib.auto_lane_change import AutoLaneChangeController, AutoLaneChangeMode
 from openpilot.sunnypilot.selfdrive.controls.lib.lane_turn_desire import LaneTurnController
+from cereal import messaging, custom
+
 
 LaneChangeState = log.LaneChangeState
 LaneChangeDirection = log.LaneChangeDirection
@@ -51,21 +54,55 @@ class DesireHelper:
     self.alc = AutoLaneChangeController(self)
     self.lane_turn_controller = LaneTurnController(self)
     self.lane_turn_direction = TurnDirection.none
+    self.sm = messaging.SubMaster(['llmDecision'])
+    self.last_llmd_frame = -1
+    self.llmd_recommendation_time = 0.0
 
-  @staticmethod
-  def get_lane_change_direction(CS):
-    return LaneChangeDirection.left if CS.leftBlinker else LaneChangeDirection.right
+  def get_lane_change_direction(self, CS, llmd=None):
+    # Blinker has priority
+    if CS.leftBlinker:
+      return LaneChangeDirection.left
+    elif CS.rightBlinker:
+      return LaneChangeDirection.right
+    # Fallback to LLMD if available
+    elif llmd is not None and llmd.direction != custom.LlmDecision.LaneChangeDirection.none:
+      return LaneChangeDirection.left if llmd.direction == custom.LlmDecision.LaneChangeDirection.left else LaneChangeDirection.right
+    # Default
+    return LaneChangeDirection.right
 
   def update(self, carstate, lateral_active, lane_change_prob):
     self.alc.update_params()
     self.lane_turn_controller.update_params()
+    self.sm.update(0)
+    llmd = self.sm["llmDecision"]
+
+    if llmd.direction != custom.LlmDecision.LaneChangeDirection.none and llmd.frame != self.last_llmd_frame:
+      self.llmd_recommendation_time = time.time()
+      self.last_llmd_frame = llmd.frame
+
+    llmd_recommendation_age = time.time() - self.llmd_recommendation_time
+    llm_change = llmd.shouldChangeLane and llmd.direction != custom.LlmDecision.LaneChangeDirection.none and llmd_recommendation_age < 5.0
+
     v_ego = carstate.vEgo
-    one_blinker = carstate.leftBlinker != carstate.rightBlinker
+    one_blinker = carstate.leftBlinker != carstate.rightBlinker or llm_change
     below_lane_change_speed = v_ego < LANE_CHANGE_SPEED_MIN
 
-    # Lane turn controller update
-    self.lane_turn_controller.update_lane_turn(blindspot_left=carstate.leftBlindspot, blindspot_right=carstate.rightBlindspot,
-                                               left_blinker=carstate.leftBlinker, right_blinker=carstate.rightBlinker, v_ego=v_ego)
+    # Lane turn controller update - blinker has priority over LLMD
+    if carstate.leftBlinker or carstate.rightBlinker:
+      # Driver using blinker - use actual blinker signals (highest priority)
+      self.lane_turn_controller.update_lane_turn(blindspot_left=carstate.leftBlindspot, blindspot_right=carstate.rightBlindspot,
+                                                 left_blinker=carstate.leftBlinker, right_blinker=carstate.rightBlinker, v_ego=v_ego)
+    elif llm_change:
+      # No blinker but LLMD recommends lane change
+      left_change = llmd.direction == custom.LlmDecision.LaneChangeDirection.left
+      right_change = llmd.direction == custom.LlmDecision.LaneChangeDirection.right
+      self.lane_turn_controller.update_lane_turn(blindspot_left=carstate.leftBlindspot, blindspot_right=carstate.rightBlindspot,
+                                                 left_blinker=left_change, right_blinker=right_change, v_ego=v_ego)
+    else:
+      # No blinker or LLMD recommendation
+      self.lane_turn_controller.update_lane_turn(blindspot_left=carstate.leftBlindspot, blindspot_right=carstate.rightBlindspot,
+                                                 left_blinker=False, right_blinker=False, v_ego=v_ego)
+
     self.lane_turn_direction = self.lane_turn_controller.get_turn_direction()
 
     if not lateral_active or self.lane_change_timer > LANE_CHANGE_TIME_MAX or self.alc.lane_change_set_timer == AutoLaneChangeMode.OFF:
@@ -77,12 +114,11 @@ class DesireHelper:
         self.lane_change_state = LaneChangeState.preLaneChange
         self.lane_change_ll_prob = 1.0
         # Initialize lane change direction to prevent UI alert flicker
-        self.lane_change_direction = self.get_lane_change_direction(carstate)
+        self.lane_change_direction = self.get_lane_change_direction(carstate, llmd)
 
       # LaneChangeState.preLaneChange
       elif self.lane_change_state == LaneChangeState.preLaneChange:
-        # Update lane change direction
-        self.lane_change_direction = self.get_lane_change_direction(carstate)
+        self.lane_change_direction = self.get_lane_change_direction(carstate, llmd)
 
         torque_applied = carstate.steeringPressed and \
                          ((carstate.steeringTorque > 0 and self.lane_change_direction == LaneChangeDirection.left) or
@@ -96,8 +132,11 @@ class DesireHelper:
         if not one_blinker or below_lane_change_speed:
           self.lane_change_state = LaneChangeState.off
           self.lane_change_direction = LaneChangeDirection.none
-        elif (torque_applied or self.alc.auto_lane_change_allowed) and not blindspot_detected:
-          self.lane_change_state = LaneChangeState.laneChangeStarting
+        elif not blindspot_detected:
+          if (carstate.leftBlinker or carstate.rightBlinker) and (torque_applied or self.alc.auto_lane_change_allowed):
+            self.lane_change_state = LaneChangeState.laneChangeStarting
+          elif llm_change and not (carstate.leftBlinker or carstate.rightBlinker) and self.alc.auto_lane_change_allowed:
+            self.lane_change_state = LaneChangeState.laneChangeStarting
 
       # LaneChangeState.laneChangeStarting
       elif self.lane_change_state == LaneChangeState.laneChangeStarting:
@@ -110,7 +149,6 @@ class DesireHelper:
 
       # LaneChangeState.laneChangeFinishing
       elif self.lane_change_state == LaneChangeState.laneChangeFinishing:
-        # fade in laneline over 1s
         self.lane_change_ll_prob = min(self.lane_change_ll_prob + DT_MDL, 1.0)
 
         if self.lane_change_ll_prob > 0.99:

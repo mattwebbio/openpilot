@@ -454,7 +454,18 @@ struct ModelDataV2SP @0xa1680744031fdb2d {
   }
 }
 
-struct CustomReserved10 @0xcb9fd56c7057593a {
+struct LlmDecision @0xcb9fd56c7057593a {
+  shouldChangeLane @0 :Bool;
+  direction @1 :LaneChangeDirection;
+  confidence @2 :Float32;
+  reason @3 :Text;
+  frame @4 :UInt32;
+
+  enum LaneChangeDirection {
+    none @0;
+    left @1;
+    right @2;
+  }
 }
 
 struct CustomReserved11 @0xc2243c65e0340384 {
