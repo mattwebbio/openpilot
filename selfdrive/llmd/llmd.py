@@ -8,15 +8,11 @@ from msgq.visionipc import VisionIpcClient, VisionStreamType
 from cereal import log
 
 
-def call_claude_cli(prompt, image_paths):
-  """Call Claude via CLI subprocess with images"""
+def call_claude_cli(prompt):
+  """Call Claude via CLI subprocess"""
   try:
-    # Build the claude command with images
-    cmd = ["/data/npm-global/bin/claude"]
-
-    # Add images to the command
-    for img_path in image_paths:
-      cmd.extend(["-i", img_path])
+    # Build the claude command
+    cmd = ["/data/npm-global/bin/claude", "--print"]
 
     # Set up environment with API key
     env = os.environ.copy()
@@ -94,12 +90,12 @@ def main():
         with open(extra_img_path, 'wb') as f:
           f.write(buf_extra.data)
 
-        # Create prompt with vehicle telemetry
+        # Create prompt with vehicle telemetry and image paths
         prompt = f"""I am driving at {current_speed:.1f} m/s with cruise control set to {cruise_speed:.1f} m/s.
 Based on the road conditions and traffic in these images, should I do a lane change?
 
-Main camera view is in the first image.
-Wide camera view is in the second image.
+Main camera view: {main_img_path}
+Wide camera view: {extra_img_path}
 
 Respond with ONLY a JSON object (no markdown, no extra text) with this exact format:
 {{
@@ -109,8 +105,8 @@ Respond with ONLY a JSON object (no markdown, no extra text) with this exact for
   "reason": "brief explanation"
 }}"""
 
-        # Call Claude via CLI with both images
-        response_text = call_claude_cli(prompt, [main_img_path, extra_img_path])
+        # Call Claude via CLI
+        response_text = call_claude_cli(prompt)
 
       # Remove markdown code blocks if present
       if response_text.startswith("```"):
