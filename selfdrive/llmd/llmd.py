@@ -37,7 +37,7 @@ def convert_nv12_to_jpg(buf_main, jpg_quality=80, scale=1):
 
 
 class OllamaClient:
-  def __init__(self, host="http://localhost:11434", include_reason=True):
+  def __init__(self, host="http://localhost:11434", include_reason=False):
     self.model = "llava:7b"
     self.client = Client(host=host)
     self.include_reason = include_reason
