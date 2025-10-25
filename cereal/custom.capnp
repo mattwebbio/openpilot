@@ -454,7 +454,10 @@ struct ModelDataV2SP @0xa1680744031fdb2d {
   }
 }
 
-struct CustomReserved10 @0xcb9fd56c7057593a {
+struct LlmDecision @0xcb9fd56c7057593a {
+  predictedSpeed @0 :Float32;
+  reason @1 :Text;
+  frame @2 :UInt32;
 }
 
 struct CustomReserved11 @0xc2243c65e0340384 {
